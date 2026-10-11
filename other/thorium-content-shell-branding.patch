@@ -20,7 +20,7 @@ index 936e523aa0c65..1a540cf790354 100644
  
      if (toolkit_views && !is_mac && !is_castos) {
 diff --git a/content/shell/BUILD.gn b/content/shell/BUILD.gn
-index b469f34869406..f486a8ef6fe0d 100644
+index b469f34869406..482b8406f5bdc 100644
 --- a/content/shell/BUILD.gn
 +++ b/content/shell/BUILD.gn
 @@ -1,4 +1,4 @@
@@ -76,7 +76,15 @@ index b469f34869406..f486a8ef6fe0d 100644
        visibility = [ ":*" ]
      }
  
-@@ -1113,7 +1113,7 @@ if (is_android) {
+@@ -862,6 +862,7 @@ if (is_apple) {
+       }
+       if (!use_v8_context_snapshot || include_both_v8_snapshots) {
+         sources += [ "$root_out_dir/snapshot_blob.bin" ]
++        public_deps += [ "//v8:run_mksnapshot_default" ]
+       }
+     }
+ 
+@@ -1113,7 +1114,7 @@ if (is_android) {
        "//content/test/data/media/",
      ]
      data_deps = [
@@ -85,7 +93,7 @@ index b469f34869406..f486a8ef6fe0d 100644
        "//build/android:devil_chromium_py",
        "//build/android:test_runner_py",
        "//testing:test_scripts_shared",
-@@ -1125,7 +1125,7 @@ if (is_android) {
+@@ -1125,7 +1126,7 @@ if (is_android) {
  group("content_shell_crash_test") {
    testonly = true
    data_deps = [

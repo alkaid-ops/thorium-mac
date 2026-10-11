@@ -1,8 +1,8 @@
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index f02c32aa3dec3..8e0a1072c00c0 100644
+index b3e9e96874fff..d472c97eb84c2 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
-@@ -1399,7 +1399,6 @@ if (is_win) {
+@@ -1400,7 +1400,6 @@ if (is_win) {
        ":widevine_cdm_library",
        "//chrome/browser/resources/media/mei_preload:component_bundle",
        "//chrome/browser/web_applications/isolated_web_apps/key_distribution/preload:component_bundle",
