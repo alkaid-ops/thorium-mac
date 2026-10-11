@@ -2291,10 +2291,18 @@ index 14e18855e2a87..0f059370d8fbe 100644
    const api::tabs::WindowType window_type_;
  
 diff --git a/chrome/browser/extensions/extension_management.cc b/chrome/browser/extensions/extension_management.cc
-index 70216f37ab263..2babf5c5f1700 100644
+index 70216f37ab263..cb2e3a17e5f6f 100644
 --- a/chrome/browser/extensions/extension_management.cc
 +++ b/chrome/browser/extensions/extension_management.cc
-@@ -198,6 +198,12 @@ ManagedInstallationMode ExtensionManagement::GetInstallationMode(
+@@ -67,6 +67,7 @@
+ #include "url/gurl.h"
+ 
+ #if BUILDFLAG(IS_ANDROID)
++#include "extensions/common/extension_features.h"
+ #include "google_apis/gaia/gaia_auth_util.h"
+ #endif
+ 
+@@ -198,6 +199,12 @@ ManagedInstallationMode ExtensionManagement::GetInstallationMode(
  ManagedInstallationMode ExtensionManagement::GetInstallationMode(
      const ExtensionId& extension_id,
      const std::string& update_url) {
