@@ -108,6 +108,7 @@ jobs:
           git -C "$CR_DIR" fetch --depth=1 origin "refs/tags/$CHROMIUM_TAG:refs/tags/$CHROMIUM_TAG"
           git -C "$CR_DIR" checkout -f "tags/$CHROMIUM_TAG"
           git -C "$CR_DIR" clean -ffd
+          cd "$CR_DIR"
           # Sync only the dependencies required by the pinned revision. The
           # full version.py path also fetches every branch/tag and can hit
           # chromium.googlesource.com rate limits.
