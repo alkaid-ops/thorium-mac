@@ -7,10 +7,9 @@ is_debug = false
 thin_lto_enable_cache = false
 enable_reporting = false
 is_component_build = false
-# Xcode 16.2 system SDKs do not provide the modulemaps expected by
-# Chromium's bundled libc++ modules. Use the system libc++ consistently.
-use_custom_libcxx = false
-use_custom_libcxx_for_host = false
+# Xcode 16.2 provides its own Darwin modulemaps; use the non-unified
+# sysroot module path so GN can track them as generated inputs.
+use_unified_system_module = false
 symbol_level = 0
 optimize_webui = true
 treat_warnings_as_errors = false
