@@ -1,0 +1,200 @@
+name: Build macOS ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: macOS runner label; macOS 14 provides the required Xcode 16.2 toolchain
+        required: true
+        default: macos-14
+        type: choice
+        options:
+          - macos-14
+          - macos-14-xlarge
+          - macos-15
+          - macos-15-xlarge
+          - macos-26
+      xcode_version:
+        description: Xcode version to select (macOS 14 runner provides 16.2 and 15.4)
+        required: true
+        default: "16.2"
+        type: choice
+        options:
+          - "16.2"
+          - "15.4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-macos-arm64-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-macos-arm64:
+    name: Build macOS ARM64 DMG
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 360
+    env:
+      CR_DIR: ${{ github.workspace }}/../chromium/src
+      THOR_DIR: ${{ github.workspace }}
+      DEPOT_TOOLS_DIR: ${{ github.workspace }}/../depot_tools
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+      XCODE_VERSION: ${{ inputs.xcode_version }}
+      CHROMIUM_TAG: "156.0.8078.28"
+
+    steps:
+      - name: Check out Thorium
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Select compatible Xcode and report SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode_app="/Applications/Xcode_${XCODE_VERSION}.app"
+          test -d "$xcode_app"
+          sudo xcode-select -s "$xcode_app"
+          xcodebuild -version
+          xcrun --show-sdk-version
+          uname -m
+          sw_vers
+
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          keep="/Applications/Xcode_${XCODE_VERSION}.app"
+          for app in /Applications/Xcode_*.app; do
+            if [[ -d "$app" && "$app" != "$keep" ]]; then
+              sudo rm -rf "$app"
+            fi
+          done
+          sudo rm -rf /Applications/Google\ Chrome*.app || true
+          sudo rm -rf /Applications/Microsoft\ Edge*.app || true
+          sudo rm -rf /Applications/Firefox*.app || true
+          sudo rm -rf "$HOME/Library/Developer/CoreSimulator/Caches" || true
+          sudo rm -rf "$HOME/Library/Developer/Xcode/DerivedData" || true
+          sudo rm -rf "$HOME/Library/Caches/Homebrew" || true
+          df -h /
+          du -sh "$HOME/Library/Developer" 2>/dev/null || true
+
+      - name: Download depot_tools and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 get_repo.py \
+            --chromium-src "$CR_DIR" \
+            --thorium-root "$THOR_DIR" \
+            --depot-tools "$DEPOT_TOOLS_DIR" \
+            --no-history \
+            --skip-build-deps \
+            --yes
+          df -h /
+          du -sh "$CR_DIR" "$CR_DIR/.git" "$DEPOT_TOOLS_DIR" 2>/dev/null || true
+
+      - name: Check out pinned Chromium revision and run hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEPOT_TOOLS_DIR:$PATH"
+          git -C "$CR_DIR" fetch --depth=1 origin "refs/tags/$CHROMIUM_TAG:refs/tags/$CHROMIUM_TAG"
+          python3 version.py \
+            --chromium-src "$CR_DIR" \
+            --depot-tools "$DEPOT_TOOLS_DIR"
+          df -h /
+
+      - name: Apply Thorium macOS overlay and patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 setup.py \
+            --mac \
+            --chromium-src "$CR_DIR" \
+            --thorium-root "$THOR_DIR"
+
+      - name: Configure GN with macOS 14 compatibility profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEPOT_TOOLS_DIR:$PATH"
+          mkdir -p "$CR_DIR/out/thorium"
+          cp other/Mac/mac_ARM_args.gn "$CR_DIR/out/thorium/args.gn"
+          {
+            echo ''
+            echo '# Pin compatibility target for macOS 14 builds.'
+            echo 'mac_deployment_target = "13.0"'
+            echo 'mac_min_system_version = "13.0"'
+          } >> "$CR_DIR/out/thorium/args.gn"
+          cd "$CR_DIR"
+          gn gen out/thorium
+          gn args out/thorium --list | grep -E '^(is_official_build|is_debug|use_thin_lto|thin_lto_enable_optimizations|chrome_pgo_phase|mac_deployment_target|mac_min_system_version|target_cpu|target_os) ='
+
+      - name: Build ARM64 Thorium application
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEPOT_TOOLS_DIR:$PATH"
+          python3 build.py \
+            --chromium-src "$CR_DIR" \
+            --thorium-root "$THOR_DIR" \
+            --out-dir out/thorium \
+            --no-installer \
+            -j 4 \
+            --expect-os mac \
+            --expect-cpu arm64
+          df -h /
+
+      - name: Create DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 create_dmg.py \
+            --chromium-src "$CR_DIR" \
+            --thorium-root "$THOR_DIR"
+          mkdir -p release
+          cp "$CR_DIR/out/thorium/Thorium_MacOS.dmg" release/Thorium_MacOS_ARM64.dmg
+          (
+            cd release
+            shasum -a 256 Thorium_MacOS_ARM64.dmg > Thorium_MacOS_ARM64.dmg.sha256
+          )
+          ls -lh release
+
+      - name: Verify built application
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$CR_DIR/out/thorium/Thorium.app"
+          test -d "$app"
+          file "$app/Contents/MacOS/Thorium"
+          lipo -archs "$app/Contents/MacOS/Thorium"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          defaults read "$app/Contents/Info.plist" CFBundleShortVersionString
+
+      - name: Upload macOS DMG and build metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: thorium-macos-arm64-m156-compat
+          path: |
+            release/*.dmg
+            release/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: thorium-macos-arm64-m156-build-diagnostics
+          path: |
+            ${{ env.CR_DIR }}/out/thorium/args.gn
+            ${{ env.CR_DIR }}/out/thorium/build.ninja
+          if-no-files-found: warn
+          retention-days: 7
